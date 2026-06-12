@@ -420,28 +420,53 @@ function doRemove(v){workers=workers.filter(w=>w!==v);closeM();render();showToas
 
 async function doSave(){
   const data={workers,workerColors,sched,wOrders,cy,cm};
-  try{
-    if(typeof window.storage==='undefined') throw new Error('Storage no disponible');
-    await window.storage.set('brigada-v1',JSON.stringify(data));
-    showToast('💾 Configuración guardada correctamente');
-  }catch(e){showToast('❌ Error al guardar: '+e.message);}
+  const json=JSON.stringify(data);
+  // Guardar en window.storage (persistente entre sesiones)
+  let storageDone=false;
+  if(typeof window.storage!=='undefined'){
+    try{
+      const res=await window.storage.set('brigada-v1',json);
+      if(res) storageDone=true;
+    }catch(e){console.warn('window.storage.set error:',e);}
+  }
+  // Siempre guardar también en sessionStorage como respaldo de sesión
+  try{sessionStorage.setItem('brigada-v1',json);}catch(e){}
+  if(storageDone){
+    showToast('💾 Guardado correctamente (persistente)');
+  } else {
+    showToast('💾 Guardado en sesión actual');
+  }
 }
+
 async function init(){
-  try{
-    if(typeof window.storage!=='undefined'){
+  let loaded=false;
+  // 1) Intentar window.storage (persistente)
+  if(typeof window.storage!=='undefined'){
+    try{
       const saved=await window.storage.get('brigada-v1');
       if(saved&&saved.value){
-        const d=JSON.parse(saved.value);
-        if(d.workers) workers=d.workers;
-        if(d.workerColors) workerColors={...DCOLORS,...d.workerColors};
-        if(d.sched) sched=d.sched;
-        if(d.wOrders) wOrders=d.wOrders;
-        if(d.cy!==undefined) cy=d.cy;
-        if(d.cm!==undefined) cm=d.cm;
+        applyData(JSON.parse(saved.value));
+        loaded=true;
       }
-    }
-  }catch(e){}
+    }catch(e){console.warn('window.storage.get:',e);}
+  }
+  // 2) Si no hay datos persistentes, intentar sessionStorage
+  if(!loaded){
+    try{
+      const raw=sessionStorage.getItem('brigada-v1');
+      if(raw) applyData(JSON.parse(raw));
+    }catch(e){}
+  }
   render();
+}
+
+function applyData(d){
+  if(d.workers) workers=d.workers;
+  if(d.workerColors) workerColors={...DCOLORS,...d.workerColors};
+  if(d.sched) sched=d.sched;
+  if(d.wOrders) wOrders=d.wOrders;
+  if(d.cy!==undefined) cy=d.cy;
+  if(d.cm!==undefined) cm=d.cm;
 }
 
 function downloadExcel(){
